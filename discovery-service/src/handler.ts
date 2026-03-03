@@ -3,6 +3,8 @@ import type { Logger } from 'pino';
 import type { GeoRegistry } from './geo/registry.js';
 import type { Relay } from './relay/relay.js';
 import type { EmbeddingService } from './embedding/embedding.js';
+import type { RateLimiter } from './middleware/rateLimit.js';
+import type { Stats } from './stats.js';
 import {
   InboundMessageSchema,
   PROTOCOL_VERSION,
@@ -19,6 +21,8 @@ export interface HandlerContext {
   geoRegistry: GeoRegistry;
   relay: Relay;
   embedding: EmbeddingService;
+  rateLimiter: RateLimiter;
+  stats: Stats;
   sessionSockets: Map<string, WebSocket>;
   log: Logger;
 }
@@ -79,6 +83,14 @@ async function handlePresenceRegister(
     mode: msg.mode,
   });
 
+  ctx.stats.increment('registrations');
+  ctx.stats.increment('active_sessions');
+
+  // Track geo distribution at city level (3-char prefix)
+  if (msg.geohash.length >= 3) {
+    ctx.stats.increment(`geo:${msg.geohash.slice(0, 3)}`);
+  }
+
   return {
     type: 'presence.ack',
     protocol_version: PROTOCOL_VERSION,
@@ -115,6 +127,8 @@ async function handlePresenceWithdraw(
   ctx: HandlerContext,
 ): Promise<Record<string, unknown>> {
   await ctx.geoRegistry.withdraw(msg.session_id);
+  ctx.stats.decrement('active_sessions');
+  ctx.stats.increment('withdrawals');
 
   return {
     type: 'presence.withdrawn',
@@ -127,6 +141,17 @@ async function handleDiscoveryQuery(
   msg: DiscoveryQuery,
   ctx: HandlerContext,
 ): Promise<Record<string, unknown>> {
+  // Rate limit discovery queries
+  const rateCheck = await ctx.rateLimiter.checkDiscoveryQuery(msg.session_id);
+  if (!rateCheck.allowed) {
+    return {
+      type: 'error',
+      protocol_version: PROTOCOL_VERSION,
+      code: 'rate_limited',
+      message: 'Too many discovery queries. Try again later.',
+    };
+  }
+
   ctx.log.debug({ geohash: msg.geohash_prefix, radius: msg.radius }, 'Discovery query');
 
   const matches = await ctx.geoRegistry.query({
@@ -135,6 +160,8 @@ async function handleDiscoveryQuery(
     radius: msg.radius,
     limit: msg.limit,
   });
+
+  ctx.stats.increment('discovery_queries');
 
   return {
     type: 'discovery.results',
@@ -147,6 +174,17 @@ async function handleRelayDeposit(
   msg: RelayDeposit,
   ctx: HandlerContext,
 ): Promise<Record<string, unknown>> {
+  // Rate limit negotiations
+  const rateCheck = await ctx.rateLimiter.checkNegotiationOpen(msg.from_session);
+  if (!rateCheck.allowed) {
+    return {
+      type: 'error',
+      protocol_version: PROTOCOL_VERSION,
+      code: 'rate_limited',
+      message: 'Too many negotiations. Try again later.',
+    };
+  }
+
   // Verify the sending session exists
   const senderExists = await ctx.geoRegistry.sessionExists(msg.from_session);
   if (!senderExists) {
@@ -176,6 +214,8 @@ async function handleRelayDeposit(
     ttl: msg.ttl,
     negotiationExpiresAt: msg.negotiation_expires_at,
   });
+
+  ctx.stats.increment('negotiations_opened');
 
   return {
     type: 'relay.deposited',

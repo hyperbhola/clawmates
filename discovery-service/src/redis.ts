@@ -1,16 +1,18 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
-export function createRedisClient(url: string): Redis {
+export type RedisClient = InstanceType<typeof Redis>;
+
+export function createRedisClient(url: string): RedisClient {
   const redis = new Redis(url, {
     maxRetriesPerRequest: 3,
-    retryStrategy(times) {
+    retryStrategy(times: number) {
       const delay = Math.min(times * 200, 5000);
       return delay;
     },
     lazyConnect: false,
   });
 
-  redis.on('error', (err) => {
+  redis.on('error', (err: Error) => {
     console.error('Redis connection error:', err.message);
   });
 

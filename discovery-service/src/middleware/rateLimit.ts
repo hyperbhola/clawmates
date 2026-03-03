@@ -1,9 +1,9 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis.js';
 import { keys } from '../redis.js';
 import { config } from '../config.js';
 
 export class RateLimiter {
-  constructor(private redis: Redis) {}
+  constructor(private redis: RedisClient) {}
 
   /**
    * Check if a session has exceeded the rate limit for an action.

@@ -6,6 +6,8 @@ import { createRedisClient } from './redis.js';
 import { GeoRegistry } from './geo/registry.js';
 import { Relay } from './relay/relay.js';
 import { EmbeddingService } from './embedding/embedding.js';
+import { RateLimiter } from './middleware/rateLimit.js';
+import { Stats } from './stats.js';
 import { handleMessage } from './handler.js';
 import { PROTOCOL_VERSION } from './types.js';
 
@@ -22,6 +24,8 @@ async function main() {
   const embedding = new EmbeddingService(config.embedding.modelPath);
   const geoRegistry = new GeoRegistry(redis, embedding);
   const relay = new Relay(redis, config.limits.maxMailboxSize);
+  const rateLimiter = new RateLimiter(redis);
+  const stats = new Stats(redis);
 
   await embedding.load();
   log.info('Embedding model loaded');
@@ -29,17 +33,47 @@ async function main() {
   // Track WebSocket connections by session ID for real-time relay
   const sessionSockets = new Map<string, WebSocket>();
 
-  // HTTP server (health check endpoint)
-  const server = createServer((req, res) => {
+  // HTTP server (health + stats endpoints)
+  const server = createServer(async (req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: 'ok',
         protocol_version: PROTOCOL_VERSION,
         uptime: process.uptime(),
+        connected_clients: sessionSockets.size,
       }));
       return;
     }
+
+    if (req.url === '/stats') {
+      try {
+        const funnel = await stats.getFunnel();
+        const all = await stats.getAll();
+
+        // Extract geo distribution (keys starting with "geo:")
+        const geoDistribution: Record<string, number> = {};
+        for (const [key, val] of Object.entries(all)) {
+          if (key.startsWith('geo:')) {
+            geoDistribution[key.replace('geo:', '')] = val;
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          protocol_version: PROTOCOL_VERSION,
+          uptime: process.uptime(),
+          connected_clients: sessionSockets.size,
+          funnel,
+          geo_distribution: geoDistribution,
+        }, null, 2));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to fetch stats' }));
+      }
+      return;
+    }
+
     res.writeHead(404);
     res.end();
   });
@@ -74,14 +108,17 @@ async function main() {
           geoRegistry,
           relay,
           embedding,
+          rateLimiter,
+          stats,
           sessionSockets,
           log,
         });
 
         // Bind WebSocket to session for real-time relay
         if (response && 'session_id' in response && response.type === 'presence.ack') {
-          boundSessionId = response.session_id;
-          sessionSockets.set(boundSessionId, ws);
+          const sid = (response as { session_id: string }).session_id;
+          boundSessionId = sid;
+          sessionSockets.set(sid, ws);
         }
 
         if (response) {
@@ -92,7 +129,6 @@ async function main() {
         if (parsed.type === 'relay.deposit') {
           const targetWs = sessionSockets.get(parsed.to_session);
           if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-            // Notify the target agent that they have pending messages
             targetWs.send(JSON.stringify({
               type: 'relay.notify',
               protocol_version: PROTOCOL_VERSION,
@@ -126,6 +162,7 @@ async function main() {
   // Start server
   server.listen(config.port, () => {
     log.info('ClawMates Discovery Service listening on port %d', config.port);
+    log.info('Stats endpoint: http://localhost:%d/stats', config.port);
   });
 
   // Graceful shutdown

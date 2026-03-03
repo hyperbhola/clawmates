@@ -1,4 +1,4 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis.js';
 import { nanoid } from 'nanoid';
 import { keys } from '../redis.js';
 import { config } from '../config.js';
@@ -23,7 +23,7 @@ interface QueryParams {
 
 export class GeoRegistry {
   constructor(
-    private redis: Redis,
+    private redis: RedisClient,
     private embedding: EmbeddingService,
   ) {}
 

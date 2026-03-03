@@ -67,12 +67,14 @@ export function geohashMatchesAny(geohash: string, prefixes: string[]): boolean 
 }
 
 // --- Internal helpers ---
+// Standard geohash neighbor lookup tables.
+// Reference: https://github.com/davetcoleman/geohash-js
 
 type Direction = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
 
 const NEIGHBORS: Record<string, Record<string, string>> = {
-  n: { even: 'p0r21436x8zb9dcf5h7kjnmqesgutwvy', odd: 'bc01fg45telefonías89telefonías' },
-  s: { even: '14365h7k9dcfesgujnmqp0r2twvyx8zb', odd: '238967debc01telefonías45telefonías' },
+  n: { even: 'p0r21436x8zb9dcf5h7kjnmqesgutwvy', odd: 'bc01fg45238967deuvhjyznpkmstqrwx' },
+  s: { even: '14365h7k9dcfesgujnmqp0r2twvyx8zb', odd: '238967debc01fg45uvhjyznpkmstqrwx' },
   e: { even: 'bc01fg45238967deuvhjyznpkmstqrwx', odd: 'p0r21436x8zb9dcf5h7kjnmqesgutwvy' },
   w: { even: '238967debc01fg45uvhjyznpkmstqrwx', odd: '14365h7k9dcfesgujnmqp0r2twvyx8zb' },
 };
@@ -108,8 +110,6 @@ function neighbor(geohash: string, direction: Direction): string | null {
     if (parent.length === 0) return null;
     const newParent = neighbor(parent, direction);
     if (!newParent) return null;
-    const idx = BASE32.indexOf(lastChar);
-    if (idx === -1) return null;
     return newParent + BASE32[neighborStr.indexOf(lastChar)];
   }
 

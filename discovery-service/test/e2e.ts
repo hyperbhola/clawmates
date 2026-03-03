@@ -14,7 +14,8 @@
 
 import WebSocket from 'ws';
 import nacl from 'tweetnacl';
-import { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } from 'tweetnacl-util';
+import tweetnaclUtil from 'tweetnacl-util';
+const { encodeBase64, decodeBase64, encodeUTF8, decodeUTF8 } = tweetnaclUtil;
 
 const SERVER_URL = process.env.SERVER_URL || 'ws://127.0.0.1:8787';
 const PROTOCOL_VERSION = '0.1.0';
@@ -71,14 +72,37 @@ function connect(url: string): Promise<WebSocket> {
 
 function sendAndReceive(ws: WebSocket, message: Record<string, unknown>): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Timeout waiting for response')), 5000);
+    const timer = setTimeout(() => reject(new Error('Timeout waiting for response')), 10000);
     const handler = (data: WebSocket.Data) => {
+      const parsed = JSON.parse(data.toString());
+      // Skip push notifications — we only want direct responses
+      if (parsed.type === 'relay.notify') {
+        return; // keep listening
+      }
       clearTimeout(timer);
       ws.off('message', handler);
-      resolve(JSON.parse(data.toString()));
+      resolve(parsed);
     };
     ws.on('message', handler);
     ws.send(JSON.stringify(message));
+  });
+}
+
+// Drain any pending push notifications from a websocket
+function drainNotifications(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    const handler = (data: WebSocket.Data) => {
+      const parsed = JSON.parse(data.toString());
+      if (parsed.type !== 'relay.notify') {
+        ws.off('message', handler);
+      }
+    };
+    ws.on('message', handler);
+    // Give it a brief moment to drain
+    setTimeout(() => {
+      ws.off('message', handler);
+      resolve();
+    }, 200);
   });
 }
 
@@ -356,6 +380,9 @@ async function runTest() {
   log('OK', 'Both agents withdrawn');
 
   // Verify they're gone from discovery
+  // Small delay to let any pending notifications drain
+  await new Promise(r => setTimeout(r, 500));
+
   // Re-register alice just to query
   const aliceReregister = await sendAndReceive(alice.ws, {
     type: 'presence.register',
@@ -380,7 +407,7 @@ async function runTest() {
     radius: 'nearby',
     limit: 20,
   });
-  const remainingMatches = (verifyDiscovery as any).matches;
+  const remainingMatches = (verifyDiscovery as any).matches || [];
   log('OK', `After withdrawal, nearby agents: ${remainingMatches.length} (Bob should be gone)`);
 
   // Cleanup

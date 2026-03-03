@@ -8,7 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test:e2e": "tsx test/e2e.ts"
   },
   "dependencies": {
     "ws": "^8.16.0",
@@ -23,7 +24,9 @@
     "tsx": "^4.7.0",
     "@types/ws": "^8.5.10",
     "@types/node": "^20.11.0",
-    "eslint": "^8.56.0"
+    "eslint": "^8.56.0",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
   },
   "engines": {
     "node": ">=20.0.0"

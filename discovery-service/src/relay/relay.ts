@@ -1,4 +1,4 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis.js';
 import { nanoid } from 'nanoid';
 import { keys } from '../redis.js';
 import type { RelayMessage } from '../types.js';
@@ -13,7 +13,7 @@ interface DepositParams {
 
 export class Relay {
   constructor(
-    private redis: Redis,
+    private redis: RedisClient,
     private maxMailboxSize: number,
   ) {}
 
