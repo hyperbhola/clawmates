@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --production
 COPY --from=builder /app/dist ./dist
-COPY models/ ./models/ 2>/dev/null || true
+# Models are optional — service uses fallback hash embeddings if missing
 
 ENV NODE_ENV=production
 ENV PORT=8787

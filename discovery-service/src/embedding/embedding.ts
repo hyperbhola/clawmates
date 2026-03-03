@@ -1,10 +1,12 @@
-import * as ort from 'onnxruntime-node';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { Tags } from '../types.js';
 
+// Dynamic import — onnxruntime-node is optional (large native binary)
+let ort: typeof import('onnxruntime-node') | null = null;
+
 export class EmbeddingService {
-  private session: ort.InferenceSession | null = null;
+  private session: any | null = null;
   private tokenizer: SimpleTokenizer | null = null;
   private modelPath: string;
 
@@ -14,6 +16,7 @@ export class EmbeddingService {
 
   async load(): Promise<void> {
     try {
+      ort = await import('onnxruntime-node');
       const modelFile = join(this.modelPath, 'model.onnx');
       this.session = await ort.InferenceSession.create(modelFile, {
         executionProviders: ['cpu'],
@@ -67,7 +70,7 @@ export class EmbeddingService {
   }
 
   private async embedWithModel(text: string): Promise<number[]> {
-    if (!this.session || !this.tokenizer) {
+    if (!this.session || !this.tokenizer || !ort) {
       throw new Error('Model not loaded');
     }
 
