@@ -1,0 +1,24 @@
+{
+  "name": "@clawmates/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "ClawMates OpenClaw plugin — geo-based people discovery through agent-to-agent matching",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.11.0"
+  },
+  "peerDependencies": {
+    "@openclaw/plugin": "*"
+  }
+}

@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.js.map
+
+# Environment
+.env
+.env.local
+.env.production
+
+# ONNX model files (too large for git)
+models/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Redis
+dump.rdb
+
+# Logs
+*.log
+
+# Build artifacts
+*.tsbuildinfo

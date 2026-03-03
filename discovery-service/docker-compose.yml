@@ -1,0 +1,31 @@
+services:
+  discovery:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  redis-data:
