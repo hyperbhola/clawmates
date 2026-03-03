@@ -1,12 +1,45 @@
 {
-  "name": "@clawmates/openclaw-plugin",
+  "name": "clawmates-openclaw",
   "version": "0.1.0",
-  "description": "ClawMates OpenClaw plugin — geo-based people discovery through agent-to-agent matching",
+  "description": "ClawMates OpenClaw plugin — geo-based people discovery through agent-to-agent matching. Your agent finds their agent, they negotiate privately, you only meet if both agree.",
   "type": "module",
   "main": "dist/index.js",
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  },
+  "files": [
+    "src/",
+    "dist/",
+    "skills/",
+    "openclaw.plugin.json"
+  ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "discovery",
+    "people",
+    "geo",
+    "geolocation",
+    "matching",
+    "agent",
+    "ai-agent",
+    "social",
+    "networking"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperbhola/clawmates.git",
+    "directory": "openclaw-plugin"
+  },
+  "license": "MIT",
+  "author": "hyperbhola",
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "ws": "^8.16.0",

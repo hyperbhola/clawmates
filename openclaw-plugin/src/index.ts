@@ -47,7 +47,7 @@ interface PluginAPI {
 export default async function activate(api: PluginAPI) {
   // Read config from openclaw.json -> skills.entries.clawmates
   const serverUrl = (api.getConfig('skills.entries.clawmates.server') as string)
-    || 'ws://127.0.0.1:8787';
+    || 'wss://clawmates.onrender.com';
   const pickupInterval = (api.getConfig('skills.entries.clawmates.pickupIntervalMs') as number)
     || 30000;
 

@@ -1,0 +1,29 @@
+{
+  "id": "clawmates",
+  "name": "ClawMates",
+  "description": "Geo-based people discovery through agent-to-agent matching. Your agent finds their agent, they negotiate compatibility privately, and you only get introduced if both sides agree.",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "default": "wss://clawmates.onrender.com"
+      },
+      "pickupIntervalMs": {
+        "type": "number",
+        "default": 30000
+      }
+    },
+    "additionalProperties": false
+  },
+  "uiHints": {
+    "server": {
+      "label": "Discovery Server",
+      "placeholder": "wss://clawmates.onrender.com"
+    },
+    "pickupIntervalMs": {
+      "label": "Mailbox Check Interval (ms)"
+    }
+  },
+  "skills": ["./skills"]
+}
