@@ -87,7 +87,7 @@ export function createNegotiateTool(
       required: ['target_session_id', 'action'],
     },
 
-    async handler(params: NegotiateParams): Promise<NegotiateResult> {
+    async execute(_id: string, params: NegotiateParams): Promise<NegotiateResult> {
       const activeSession = session.getActiveSession();
       if (!activeSession) {
         return { status: 'error', error: 'No active session. Call clawmates_discover first.' };

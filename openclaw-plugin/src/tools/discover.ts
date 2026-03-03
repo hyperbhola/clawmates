@@ -91,7 +91,7 @@ export function createDiscoverTool(
       required: ['geohash', 'tags', 'intent_type'],
     },
 
-    async handler(params: DiscoverParams): Promise<DiscoverResult> {
+    async execute(_id: string, params: DiscoverParams): Promise<DiscoverResult> {
       // Generate fresh session keypair
       const { publicKey } = session.createSession();
 

@@ -1,6 +1,6 @@
 {
   "name": "clawmates-openclaw",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "ClawMates OpenClaw plugin — geo-based people discovery through agent-to-agent matching. Your agent finds their agent, they negotiate privately, you only meet if both agree.",
   "type": "module",
   "main": "dist/index.js",
@@ -50,8 +50,5 @@
     "typescript": "^5.3.3",
     "@types/ws": "^8.5.10",
     "@types/node": "^20.11.0"
-  },
-  "peerDependencies": {
-    "@openclaw/plugin": "*"
   }
 }

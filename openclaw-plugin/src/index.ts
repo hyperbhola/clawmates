@@ -21,22 +21,23 @@ import type { NegotiationPayload, DiscoveryMatch } from './types.js';
  * and periodically checks the async mailbox for incoming negotiations.
  */
 
-// Type for OpenClaw's plugin API (peer dependency)
+// Type for OpenClaw's plugin API
 interface PluginAPI {
+  pluginConfig: Record<string, unknown>;
+  config: Record<string, unknown>;
   registerTool(tool: {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
-    handler: (params: any) => Promise<unknown>;
+    execute: (_id: string, params: any) => Promise<unknown>;
   }): void;
   registerService(service: {
-    name: string;
+    id: string;
     start: () => Promise<void>;
     stop: () => Promise<void>;
   }): void;
-  registerHook(event: string, handler: (event: any) => Promise<unknown>): void;
-  getConfig(path: string): unknown;
-  log: {
+  on(event: string, handler: (event: any) => Promise<unknown>): void;
+  logger: {
     info: (...args: unknown[]) => void;
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
@@ -44,104 +45,110 @@ interface PluginAPI {
   };
 }
 
-export default async function activate(api: PluginAPI) {
-  // Read config from openclaw.json -> skills.entries.clawmates
-  const serverUrl = (api.getConfig('skills.entries.clawmates.server') as string)
-    || 'wss://clawmates.onrender.com';
-  const pickupInterval = (api.getConfig('skills.entries.clawmates.pickupIntervalMs') as number)
-    || 30000;
+export default {
+  id: 'clawmates',
+  name: 'ClawMates',
+  kind: 'lifecycle',
 
-  api.log.info('[ClawMates] Initializing plugin, server:', serverUrl);
+  register(api: PluginAPI) {
+    // Read config from openclaw.json -> plugins.entries.clawmates.config
+    const cfg = api.pluginConfig || {};
+    const serverUrl = (cfg.server as string) || 'wss://clawmates.onrender.com';
+    const pickupInterval = (cfg.pickupIntervalMs as number) || 30000;
 
-  // Initialize services
-  const crypto = new CryptoService();
-  const session = new SessionService(crypto);
-  const connection = new ConnectionService(serverUrl, session);
+    const log = api.logger ?? console;
+    log.info('[ClawMates] Initializing plugin, server:', serverUrl);
 
-  // Handle incoming relay messages — decrypt and track negotiations
-  connection.on('relay.message_received', (msg: any) => {
-    try {
-      const negotiation = findNegotiationBySession(session, msg.from_session);
-      if (!negotiation) {
-        // New inbound negotiation — we need the sender's public key
-        // The agent will handle this via the skill instructions
-        api.log.info('[ClawMates] Incoming negotiation from', msg.from_session);
-        return;
-      }
+    // Initialize services
+    const crypto = new CryptoService();
+    const session = new SessionService(crypto);
+    const connection = new ConnectionService(serverUrl, session);
 
-      const decrypted = crypto.decrypt(msg.payload, negotiation.withPublicKey);
-      const payload: NegotiationPayload = JSON.parse(decrypted);
-
-      session.addNegotiationMessage(msg.from_session, payload);
-
-      if (payload.type === 'negotiate.respond' && payload.wants_to_proceed) {
-        session.updateNegotiationState(msg.from_session, 'mutual_interest');
-        api.log.info('[ClawMates] Mutual interest with', msg.from_session);
-      } else if (payload.type === 'negotiate.decline') {
-        session.updateNegotiationState(msg.from_session, 'declined');
-        api.log.info('[ClawMates] Declined by', msg.from_session);
-      } else if (payload.type === 'negotiate.intro') {
-        session.updateNegotiationState(msg.from_session, 'completed');
-        api.log.info('[ClawMates] Intro received from', msg.from_session);
-      }
-    } catch (err) {
-      api.log.error('[ClawMates] Failed to process relay message:', err);
-    }
-  });
-
-  // Register tools
-  const discoverTool = createDiscoverTool(connection, session);
-  api.registerTool(discoverTool);
-
-  const negotiateTool = createNegotiateTool(connection, session, crypto);
-  api.registerTool(negotiateTool);
-
-  const respondTool = createRespondTool(connection, session, crypto);
-  api.registerTool(respondTool);
-
-  const withdrawTool = createWithdrawTool(connection, session);
-  api.registerTool(withdrawTool);
-
-  // Background service: maintain connection
-  api.registerService({
-    name: 'clawmates-connection',
-    async start() {
+    // Handle incoming relay messages — decrypt and track negotiations
+    connection.on('relay.message_received', (msg: any) => {
       try {
-        await connection.connect();
-        api.log.info('[ClawMates] Connected to discovery service');
-      } catch (err) {
-        api.log.warn('[ClawMates] Could not connect to discovery service:', err);
-        // Will retry via reconnect logic in ConnectionService
-      }
-    },
-    async stop() {
-      // Withdraw if active
-      if (session.isActive()) {
-        try {
-          await withdrawTool.handler();
-        } catch {
-          // Best effort
+        const negotiation = findNegotiationBySession(session, msg.from_session);
+        if (!negotiation) {
+          // New inbound negotiation — we need the sender's public key
+          // The agent will handle this via the skill instructions
+          log.info('[ClawMates] Incoming negotiation from', msg.from_session);
+          return;
         }
+
+        const decrypted = crypto.decrypt(msg.payload, negotiation.withPublicKey);
+        const payload: NegotiationPayload = JSON.parse(decrypted);
+
+        session.addNegotiationMessage(msg.from_session, payload);
+
+        if (payload.type === 'negotiate.respond' && payload.wants_to_proceed) {
+          session.updateNegotiationState(msg.from_session, 'mutual_interest');
+          log.info('[ClawMates] Mutual interest with', msg.from_session);
+        } else if (payload.type === 'negotiate.decline') {
+          session.updateNegotiationState(msg.from_session, 'declined');
+          log.info('[ClawMates] Declined by', msg.from_session);
+        } else if (payload.type === 'negotiate.intro') {
+          session.updateNegotiationState(msg.from_session, 'completed');
+          log.info('[ClawMates] Intro received from', msg.from_session);
+        }
+      } catch (err) {
+        log.error('[ClawMates] Failed to process relay message:', err);
       }
-      await connection.disconnect();
-      api.log.info('[ClawMates] Disconnected from discovery service');
-    },
-  });
+    });
 
-  // Hook: inject context when there are pending inbound negotiations
-  api.registerHook('agent:bootstrap', async () => {
-    if (session.hasPendingNegotiations()) {
-      const pending = session.getPendingInbound();
-      return {
-        inject: `[ClawMates] You have ${pending.length} pending match request(s). ` +
-          `Use clawmates_respond to evaluate and reply to each.`,
-      };
-    }
-    return {};
-  });
+    // Register tools
+    const discoverTool = createDiscoverTool(connection, session);
+    api.registerTool(discoverTool);
 
-  api.log.info('[ClawMates] Plugin activated. Tools: clawmates_discover, clawmates_negotiate, clawmates_respond, clawmates_withdraw');
-}
+    const negotiateTool = createNegotiateTool(connection, session, crypto);
+    api.registerTool(negotiateTool);
+
+    const respondTool = createRespondTool(connection, session, crypto);
+    api.registerTool(respondTool);
+
+    const withdrawTool = createWithdrawTool(connection, session);
+    api.registerTool(withdrawTool);
+
+    // Background service: maintain connection
+    api.registerService({
+      id: 'clawmates-connection',
+      async start() {
+        try {
+          await connection.connect();
+          log.info('[ClawMates] Connected to discovery service');
+        } catch (err) {
+          log.warn('[ClawMates] Could not connect to discovery service:', err);
+          // Will retry via reconnect logic in ConnectionService
+        }
+      },
+      async stop() {
+        // Withdraw if active
+        if (session.isActive()) {
+          try {
+            await withdrawTool.execute('', {});
+          } catch {
+            // Best effort
+          }
+        }
+        await connection.disconnect();
+        log.info('[ClawMates] Disconnected from discovery service');
+      },
+    });
+
+    // Hook: inject context when there are pending inbound negotiations
+    api.on('before_agent_start', async () => {
+      if (session.hasPendingNegotiations()) {
+        const pending = session.getPendingInbound();
+        return {
+          inject: `[ClawMates] You have ${pending.length} pending match request(s). ` +
+            `Use clawmates_respond to evaluate and reply to each.`,
+        };
+      }
+      return {};
+    });
+
+    log.info('[ClawMates] Plugin activated. Tools: clawmates_discover, clawmates_negotiate, clawmates_respond, clawmates_withdraw');
+  },
+};
 
 function findNegotiationBySession(session: SessionService, sessionId: string) {
   return session.getNegotiation(sessionId);

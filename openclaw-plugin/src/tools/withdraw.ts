@@ -23,7 +23,7 @@ export function createWithdrawTool(
       required: [],
     },
 
-    async handler(): Promise<WithdrawResult> {
+    async execute(_id: string, _params?: any): Promise<WithdrawResult> {
       const activeSession = session.getActiveSession();
       if (!activeSession) {
         return { status: 'error', error: 'No active session to withdraw.' };

@@ -68,7 +68,7 @@ export function createRespondTool(
       required: ['target_session_id', 'action'],
     },
 
-    async handler(params: RespondParams): Promise<RespondResult> {
+    async execute(_id: string, params: RespondParams): Promise<RespondResult> {
       const activeSession = session.getActiveSession();
       if (!activeSession) {
         return { status: 'error', error: 'No active session.' };
